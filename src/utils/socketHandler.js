@@ -13,6 +13,12 @@ setInterval(() => {
             delete activeGames[gameId];
         }
     }
+    for (const gameId in games) {
+        if (now - games[gameId].createdAt > 10 * 60 * 1000) {
+            console.log(`Game ID ${gameId} expired due to inactivity`);
+            delete games[gameId];
+        }
+    }
 }, 60 * 1000);
 
 const socketHandler = (io) => {
@@ -25,7 +31,7 @@ const socketHandler = (io) => {
             const gameId = generateGameId(activeGames);
             activeGames[gameId] = {
                 createdAt: Date.now(),
-                players: [{ userId, role: null }]
+                players: [{ userId, role: null, readyForRematch: false }]
             };
             socket.join(gameId);
             callback(gameId);
@@ -53,7 +59,7 @@ const socketHandler = (io) => {
             }
 
             socket.join(gameId);
-            game.players.push({ userId, role: null });
+            game.players.push({ userId, role: null, readyForRematch: false });
 
             if (game.players.length === 2) {
                 const roles = ["X", "O"];
@@ -66,7 +72,8 @@ const socketHandler = (io) => {
                     currentPlayer: game.players.find(
                         (player) => player.role === "O"
                     ).userId,
-                    players: game.players
+                    players: game.players,
+                    createdAt: Date.now()
                 };
 
                 io.to(gameId).emit("gameStart", { players: game.players });
@@ -107,10 +114,10 @@ const socketHandler = (io) => {
                 io.to(gameId).emit("gameOver", {
                     winner: winner === "X" || winner === "O" ? userId : "Draw"
                 });
-                delete games[gameId];
+                // delete games[gameId];
             } else if (!game.board.includes(null)) {
                 io.to(gameId).emit("gameOver", { winner: "Draw" });
-                delete games[gameId];
+                // delete games[gameId];
             }
         });
 
@@ -125,14 +132,36 @@ const socketHandler = (io) => {
                 return;
             }
 
-            // Check if the user is the creator of the game
             if (game.players[0]?.userId !== userId) {
                 return;
             }
 
-            // Remove the game from both activeGames and games
             delete activeGames[gameId];
             delete games[gameId];
+        });
+
+        socket.on("requestRematch", async ({ accessToken, gameId }) => {
+            const userId = await verifyAccessTokenForSocket(accessToken);
+            if (!userId) return;
+
+            const game = games[gameId];
+            if (!game) return;
+
+            const player = game.players.find((p) => p.userId === userId);
+            if (!player) return;
+
+            player.readyForRematch = true;
+
+            if (game.players.every((p) => p.readyForRematch)) {
+                game.board = Array(9).fill(null);
+                game.players.forEach((p) => (p.readyForRematch = false));
+                game.currentPlayer = game.players.find(
+                    (p) => p.role === "O"
+                ).userId;
+                game.createdAt = Date.now();
+
+                io.to(gameId).emit("gameStart", { players: game.players });
+            }
         });
 
         // Disconnect
