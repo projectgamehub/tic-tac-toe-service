@@ -31,7 +31,6 @@ const socketHandler = (io) => {
             callback(gameId);
         });
 
-        // Join a game room
         socket.on("joinGame", async ({ accessToken, gameId }, callback) => {
             const userId = await verifyAccessTokenForSocket(accessToken);
             if (!userId) {
@@ -77,7 +76,6 @@ const socketHandler = (io) => {
             callback({ success: true, message: "Joined game successfully" });
         });
 
-        // Handle a move
         socket.on("makeMove", async ({ accessToken, gameId, index }) => {
             const userId = await verifyAccessTokenForSocket(accessToken);
             if (!userId) {
@@ -104,6 +102,7 @@ const socketHandler = (io) => {
             game.currentPlayer = nextPlayer.userId;
 
             const winner = checkWinner(game.board);
+            io.to(gameId).emit("gameUpdate", game);
             if (winner) {
                 io.to(gameId).emit("gameOver", {
                     winner: winner === "X" || winner === "O" ? userId : "Draw"
@@ -112,9 +111,28 @@ const socketHandler = (io) => {
             } else if (!game.board.includes(null)) {
                 io.to(gameId).emit("gameOver", { winner: "Draw" });
                 delete games[gameId];
-            } else {
-                io.to(gameId).emit("gameUpdate", game);
             }
+        });
+
+        socket.on("closeLobby", async ({ accessToken, gameId }) => {
+            const userId = await verifyAccessTokenForSocket(accessToken);
+            if (!userId) {
+                return;
+            }
+
+            const game = activeGames[gameId] || games[gameId];
+            if (!game) {
+                return;
+            }
+
+            // Check if the user is the creator of the game
+            if (game.players[0]?.userId !== userId) {
+                return;
+            }
+
+            // Remove the game from both activeGames and games
+            delete activeGames[gameId];
+            delete games[gameId];
         });
 
         // Disconnect
