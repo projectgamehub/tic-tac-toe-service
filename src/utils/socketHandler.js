@@ -157,6 +157,12 @@ const socketHandler = (io) => {
             if (game.players.every((p) => p.readyForRematch)) {
                 game.board = Array(9).fill(null);
                 game.players.forEach((p) => (p.readyForRematch = false));
+
+                const roles = ["X", "O"];
+                const randomIndex = Math.floor(Math.random() * 2);
+                game.players[0].role = roles[randomIndex];
+                game.players[1].role = roles[1 - randomIndex];
+
                 game.currentPlayer = game.players.find(
                     (p) => p.role === "O"
                 ).userId;
