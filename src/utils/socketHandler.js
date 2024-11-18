@@ -1,6 +1,7 @@
 import verifyAccessTokenForSocket from "./verifyAccessTokenForSocket.js";
 import generateGameId from "./generateGameId.js";
 import checkWinner from "./checkWinner.js";
+import updateScore from "./updateScore.js";
 
 let games = {};
 let activeGames = {};
@@ -114,10 +115,11 @@ const socketHandler = (io) => {
                 io.to(gameId).emit("gameOver", {
                     winner: winner === "X" || winner === "O" ? userId : "Draw"
                 });
-                // delete games[gameId];
+                if (winner === "X" || winner === "O") {
+                    updateScore(userId);
+                }
             } else if (!game.board.includes(null)) {
                 io.to(gameId).emit("gameOver", { winner: "Draw" });
-                // delete games[gameId];
             }
         });
 
