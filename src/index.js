@@ -1,26 +1,38 @@
 import express from "express";
-import { PORT } from "./config/index.js";
+import { NODE_ENV, PORT } from "./config/index.js";
 import cors from "cors";
 import router from "./routes/index.js";
 import { Server as SocketIO } from "socket.io";
 import socketHandler from "./utils/socketHandler.js";
+import fs from "fs";
+import https from "https";
 
 const app = express();
 
-const initializeServer = () => {
-    // TODO Configure this later
-    app.use(cors());
+// TODO Configure this later
+app.use(cors());
 
-    // TODO Add Limit on this
-    app.use(express.urlencoded({ extended: false }));
-    app.use(express.json());
+// TODO Add Limit on this
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 
-    app.use("/", router);
-};
+app.use("/", router);
 
-const server = app.listen(PORT, async () => {
-    initializeServer();
-    console.log("Listening on port: ", PORT);
+const sslOptions =
+    NODE_ENV === "production"
+        ? {
+            key: fs.readFileSync("./certs/privkey.pem"),
+            cert: fs.readFileSync("./certs/fullchain.pem"),
+        }
+        : {
+            key: fs.readFileSync("./certs/localhost-key.pem"),
+            cert: fs.readFileSync("./certs/localhost-cert.pem"),
+        };
+
+const server = https.createServer(sslOptions, app);
+
+server.listen(PORT, async () => {
+    console.log("HTTPS server listening on port: ", PORT);
 });
 
 // TODO Configure this CORS later
@@ -32,3 +44,10 @@ const io = new SocketIO(server, {
 });
 
 socketHandler(io);
+
+process.on("unhandledRejection", (err) => {
+    console.log(`Unhandled rejection ${err.name} occurred`);
+    server.close(() => {
+        process.exit(1);
+    });
+});
